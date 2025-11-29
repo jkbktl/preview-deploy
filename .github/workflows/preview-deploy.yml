@@ -10,15 +10,9 @@ jobs:
     # Only run when:
     # 1. Comment is on a PR (not an issue)
     # 2. Comment contains /deploy command
-    # 3. Commenter has write access (member/collaborator)
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '/deploy') &&
-      (
-        github.event.comment.author_association == 'MEMBER' ||
-        github.event.comment.author_association == 'OWNER' ||
-        github.event.comment.author_association == 'COLLABORATOR'
-      )
+      contains(github.event.comment.body, '/deploy')
     runs-on: ubuntu-latest
 
     steps:
