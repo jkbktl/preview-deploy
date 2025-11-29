@@ -4,21 +4,21 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
 jobs:
   deploy-preview:
     name: Deploy Preview
     # Only run when:
     # 1. Comment is on a PR (not an issue)
     # 2. Comment contains /deploy command
-    # 3. Commenter has write access (member/collaborator)
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '/deploy') &&
-      (
-        github.event.comment.author_association == 'MEMBER' ||
-        github.event.comment.author_association == 'OWNER' ||
-        github.event.comment.author_association == 'COLLABORATOR'
-      )
+      contains(github.event.comment.body, '/deploy')
     runs-on: ubuntu-latest
 
     steps:
@@ -44,6 +44,19 @@ jobs:
               repo: context.repo.repo,
               comment_id: context.payload.comment.id,
               content: 'rocket'
+            });
+
+      - name: Set pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.head_sha }}',
+              state: 'pending',
+              context: 'Preview Deploy',
+              description: 'Building and deploying preview...'
             });
 
       - name: Checkout PR head
@@ -83,6 +96,22 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      - name: Set success status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.head_sha }}',
+              state: 'success',
+              context: 'Preview Deploy',
+              description: 'Preview deployed successfully',
+              target_url: process.env.DEPLOY_URL
+            });
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+
       - name: Comment PR with preview URL
         uses: actions/github-script@v7
         with:
@@ -95,3 +124,17 @@ jobs:
             })
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+
+      - name: Set failure status
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.head_sha }}',
+              state: 'failure',
+              context: 'Preview Deploy',
+              description: 'Deployment failed - check Actions logs'
+            });
